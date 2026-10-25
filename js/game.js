@@ -498,27 +498,6 @@ function drawWorkshop(width, height) {
   ctx.arc(143, 40, 11, 0, Math.PI * 2);
   ctx.fill();
 
-  // 右側木層架與收納罐。
-  ctx.fillStyle = "#a97858";
-  ctx.fillRect(502, 39, 174, 10);
-  ctx.fillRect(517, 49, 7, 41);
-  ctx.fillRect(654, 49, 7, 41);
-  [
-    { x: 535, color: "#f3b4bb" },
-    { x: 570, color: "#b8d9b6" },
-    { x: 605, color: "#f3d18d" },
-    { x: 640, color: "#c6b8e4" }
-  ].forEach((jar) => {
-    ctx.fillStyle = "rgba(255,255,255,.75)";
-    ctx.beginPath();
-    ctx.roundRect(jar.x, 60, 24, 29, 5);
-    ctx.fill();
-    ctx.fillStyle = jar.color;
-    ctx.fillRect(jar.x + 3, 69, 18, 17);
-    ctx.fillStyle = "#a97858";
-    ctx.fillRect(jar.x + 5, 55, 14, 5);
-  });
-
   function drawFramedPicture(image, x, y, width, height) {
     ctx.save();
     ctx.shadowColor = "rgba(83, 55, 42, .28)";
@@ -612,6 +591,45 @@ function drawWorkshop(width, height) {
   for (let x = 24; x < width; x += 92) {
     ctx.fillRect(x, 263, 2, 47);
   }
+  ctx.strokeStyle = "rgba(255, 224, 168, .72)";
+  ctx.lineWidth = 2;
+  [20, 526].forEach((x) => {
+    ctx.beginPath();
+    ctx.roundRect(x, 260, 174, 42, 9);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(110, 66, 48, .22)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x + 4, 264, 166, 34, 6);
+    ctx.stroke();
+    ctx.fillStyle = "#f1ce8a";
+    [x + 12, x + 162].forEach((knobX) => {
+      ctx.beginPath();
+      ctx.arc(knobX, 281, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.strokeStyle = "rgba(255, 224, 168, .72)";
+    ctx.lineWidth = 2;
+  });
+
+  // 櫃台中央的花形徽章與兩側抽屜飾紋。
+  ctx.fillStyle = "#f3d89e";
+  ctx.beginPath();
+  ctx.arc(360, 280, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#b97e5c";
+  for (let petal = 0; petal < 5; petal += 1) {
+    const angle = -Math.PI / 2 + petal * Math.PI * 2 / 5;
+    ctx.beginPath();
+    ctx.arc(360 + Math.cos(angle) * 6, 280 + Math.sin(angle) * 6, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#e5b978";
+  [54, 78, 136, 160, 560, 584, 642, 666].forEach((x) => {
+    ctx.beginPath();
+    ctx.arc(x, 281, 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
 
   // 中央檯面上的展示盤與玩家正在製作的蛋糕。
   ctx.fillStyle = "rgba(92, 57, 43, .16)";
