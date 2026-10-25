@@ -58,14 +58,14 @@ const AVATARS = [
   {
     id: "avatar-tricycle",
     image: "./assets/835996759_935333869257991_8536188703495291097_n.jpg",
-    permanentlyLocked: true
+    purchaseCost: 100000000
   },
   { id: "avatar-frog-tie", image: "./assets/images.jpg", purchaseCost: 300 }
 ];
 const purchasableAvatarIds = AVATARS
   .filter((avatar) => avatar.purchaseCost)
   .map((avatar) => avatar.id);
-const retiredAvatarIds = ["avatar-yellow", "avatar-tricycle"];
+const retiredAvatarIds = ["avatar-yellow"];
 const savedAvatarIds = [...purchasableAvatarIds, ...retiredAvatarIds];
 
 // 讀取畫面節點一次並保留參照，避免每次操作都重新查詢 DOM。
@@ -1254,15 +1254,13 @@ function renderAvatarOptions() {
     const isPurchased = !avatar.purchaseCost || state.purchasedAvatarIds.includes(avatar.id);
     const levelUnlocked = !avatar.unlockLevel || state.level >= avatar.unlockLevel;
     const alreadyPurchased = state.purchasedAvatarIds.includes(avatar.id);
-    const canSelect = (levelUnlocked && !avatar.permanentlyLocked) || alreadyPurchased;
+    const canSelect = levelUnlocked || alreadyPurchased;
     const isUnlocked = canSelect && isPurchased;
     button.disabled = !canSelect;
     button.setAttribute(
       "aria-label",
       !canSelect
-        ? avatar.permanentlyLocked
-          ? "已永久鎖定，無法購買"
-          : `已鎖定，等級 ${avatar.unlockLevel} 解鎖`
+        ? `已鎖定，等級 ${avatar.unlockLevel} 解鎖`
         : isUnlocked
           ? `選擇第 ${index + 1} 張頭像`
           : `購買第 ${index + 1} 張頭像，${avatar.purchaseCost} 金幣`
@@ -1277,7 +1275,7 @@ function renderAvatarOptions() {
     if (!canSelect) {
       const lockLabel = document.createElement("span");
       lockLabel.className = "avatar-lock-label";
-      lockLabel.textContent = avatar.permanentlyLocked ? "🔒 無法購買" : `🔒 ${avatar.unlockLevel} 級`;
+      lockLabel.textContent = `🔒 ${avatar.unlockLevel} 級`;
       button.append(lockLabel);
     } else {
       if (!isPurchased) {
