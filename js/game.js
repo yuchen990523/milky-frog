@@ -45,7 +45,7 @@ const CUSTOMERS = [
   { id: "customer-09", image: "./assets/qy.png.jpg" },
   { id: "customer-10", image: "./assets/u.png.jpg" },
   { id: "customer-11", image: "./assets/w.png.jpg" },
-  { id: "customer-12", image: "./assets/奶蛙.webp" }
+  { id: "customer-12", image: "./assets/o,png.jpg" }
 ];
 
 const AVATARS = [
