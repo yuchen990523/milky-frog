@@ -55,13 +55,17 @@ const AVATARS = [
   { id: "avatar-laugh", image: "./assets/avatar-laugh.webp", purchaseCost: 300 },
   { id: "avatar-pink", image: "./assets/avatar-pink.webp", purchaseCost: 300 },
   { id: "avatar-success", image: "./assets/avatar-success.jpg", purchaseCost: 300 },
-  { id: "avatar-tricycle", image: "./assets/835996759_935333869257991_8536188703495291097_n.jpg", purchaseCost: 300 },
+  {
+    id: "avatar-tricycle",
+    image: "./assets/835996759_935333869257991_8536188703495291097_n.jpg",
+    permanentlyLocked: true
+  },
   { id: "avatar-frog-tie", image: "./assets/images.jpg", purchaseCost: 300 }
 ];
 const purchasableAvatarIds = AVATARS
   .filter((avatar) => avatar.purchaseCost)
   .map((avatar) => avatar.id);
-const retiredAvatarIds = ["avatar-yellow"];
+const retiredAvatarIds = ["avatar-yellow", "avatar-tricycle"];
 const savedAvatarIds = [...purchasableAvatarIds, ...retiredAvatarIds];
 
 // 讀取畫面節點一次並保留參照，避免每次操作都重新查詢 DOM。
@@ -107,8 +111,11 @@ const avatarSwitch = document.querySelector("#avatarSwitch");
 const playerAvatar = document.querySelector("#playerAvatar");
 const avatarDialog = document.querySelector("#avatarDialog");
 const avatarOptions = document.querySelector("#avatarOptions");
+const avatarConfirmDialog = document.querySelector("#avatarConfirmDialog");
+const avatarConfirmText = document.querySelector("#avatarConfirmText");
 const levelProgressDialog = document.querySelector("#levelProgressDialog");
 const levelUnlockProgress = document.querySelector("#levelUnlockProgress");
+let pendingAvatarPurchase = null;
 
 function loadNickname() {
   try {
@@ -225,8 +232,10 @@ function updateLevelDisplay() {
     : 10 + Math.floor((level - 51) / 10);
   const title = titles[Math.min(titleIndex, titles.length - 1)];
   const selectedAvatar = AVATARS[state.avatarIndex];
+  const selectedAvatarIsPurchased =
+    selectedAvatar.purchaseCost && state.purchasedAvatarIds.includes(selectedAvatar.id);
   if (
-    (selectedAvatar.unlockLevel && level < selectedAvatar.unlockLevel) ||
+    (selectedAvatar.unlockLevel && level < selectedAvatar.unlockLevel && !selectedAvatarIsPurchased) ||
     (selectedAvatar.purchaseCost && !state.purchasedAvatarIds.includes(selectedAvatar.id))
   ) {
     state.avatarIndex = 0;
@@ -1242,14 +1251,18 @@ function renderAvatarOptions() {
     const button = document.createElement("button");
     button.className = "avatar-option";
     button.type = "button";
-    const levelUnlocked = !avatar.unlockLevel || state.level >= avatar.unlockLevel;
     const isPurchased = !avatar.purchaseCost || state.purchasedAvatarIds.includes(avatar.id);
-    const isUnlocked = levelUnlocked && isPurchased;
-    button.disabled = !levelUnlocked;
+    const levelUnlocked = !avatar.unlockLevel || state.level >= avatar.unlockLevel;
+    const alreadyPurchased = state.purchasedAvatarIds.includes(avatar.id);
+    const canSelect = (levelUnlocked && !avatar.permanentlyLocked) || alreadyPurchased;
+    const isUnlocked = canSelect && isPurchased;
+    button.disabled = !canSelect;
     button.setAttribute(
       "aria-label",
-      !levelUnlocked
-        ? `已鎖定，等級 ${avatar.unlockLevel} 解鎖`
+      !canSelect
+        ? avatar.permanentlyLocked
+          ? "已永久鎖定，無法購買"
+          : `已鎖定，等級 ${avatar.unlockLevel} 解鎖`
         : isUnlocked
           ? `選擇第 ${index + 1} 張頭像`
           : `購買第 ${index + 1} 張頭像，${avatar.purchaseCost} 金幣`
@@ -1261,10 +1274,10 @@ function renderAvatarOptions() {
     image.alt = "";
     image.loading = "lazy";
     button.append(image);
-    if (!levelUnlocked) {
+    if (!canSelect) {
       const lockLabel = document.createElement("span");
       lockLabel.className = "avatar-lock-label";
-      lockLabel.textContent = `🔒 ${avatar.unlockLevel} 級`;
+      lockLabel.textContent = avatar.permanentlyLocked ? "🔒 無法購買" : `🔒 ${avatar.unlockLevel} 級`;
       button.append(lockLabel);
     } else {
       if (!isPurchased) {
@@ -1285,42 +1298,84 @@ function renderAvatarOptions() {
               `金幣不足，購買此頭像需要 ${avatar.purchaseCost} 金幣（目前有 ${state.totalCoins} 金幣）。`;
             return;
           }
-
-          const purchasedAvatarIds = [...state.purchasedAvatarIds, avatar.id];
-          const remainingCoins = state.totalCoins - avatar.purchaseCost;
-          try {
-            localStorage.setItem(
-              progressStorageKey,
-              JSON.stringify({
-                totalExperience: state.totalExperience,
-                totalCoins: remainingCoins,
-                purchasedAvatarIds
-              })
-            );
-          } catch (error) {
-            console.error("保存頭像購買紀錄失敗：", error);
-            message.textContent = "無法保存頭像購買紀錄，金幣未扣除；請檢查瀏覽器的本機儲存設定。";
-            return;
-          }
-          state.totalCoins = remainingCoins;
-          state.purchasedAvatarIds = purchasedAvatarIds;
-          message.textContent = `已花費 ${avatar.purchaseCost} 金幣購買頭像。`;
+          pendingAvatarPurchase = { avatar, index };
+          avatarConfirmText.textContent =
+            `要花費 ${avatar.purchaseCost} 金幣購買這個頭像嗎？目前有 ${state.totalCoins} 金幣。`;
+          avatarDialog.close();
+          avatarConfirmDialog.showModal();
+          document.querySelector("#avatarConfirmBuy").focus();
+          return;
         }
 
-        state.avatarIndex = index;
-        updateLevelDisplay();
-        renderAvatarOptions();
-        try {
-          localStorage.setItem("milk-frog-cake-shop-avatar", String(index));
-        } catch (error) {
-          console.error("保存玩家頭像失敗：", error);
-          message.textContent += "頭像已套用，但無法保存目前選擇；重新載入後可能會還原。";
-        }
+        applyAvatarSelection(avatar, index);
       });
     }
     return button;
   }));
 }
+
+function applyAvatarSelection(avatar, index) {
+  if (avatar.purchaseCost && !state.purchasedAvatarIds.includes(avatar.id)) {
+    if (state.totalCoins < avatar.purchaseCost) {
+      message.textContent =
+        `金幣不足，購買此頭像需要 ${avatar.purchaseCost} 金幣（目前有 ${state.totalCoins} 金幣）。`;
+      return;
+    }
+
+    const purchasedAvatarIds = [...state.purchasedAvatarIds, avatar.id];
+    const remainingCoins = state.totalCoins - avatar.purchaseCost;
+    try {
+      localStorage.setItem(
+        progressStorageKey,
+        JSON.stringify({
+          totalExperience: state.totalExperience,
+          totalCoins: remainingCoins,
+          purchasedAvatarIds
+        })
+      );
+    } catch (error) {
+      console.error("保存頭像購買紀錄失敗：", error);
+      message.textContent = "無法保存頭像購買紀錄，金幣未扣除；請檢查瀏覽器的本機儲存設定。";
+      return;
+    }
+    state.totalCoins = remainingCoins;
+    state.purchasedAvatarIds = purchasedAvatarIds;
+    message.textContent = `已花費 ${avatar.purchaseCost} 金幣購買頭像。`;
+  }
+
+  state.avatarIndex = index;
+  updateLevelDisplay();
+  renderAvatarOptions();
+  try {
+    localStorage.setItem("milk-frog-cake-shop-avatar", String(index));
+  } catch (error) {
+    console.error("保存玩家頭像失敗：", error);
+    message.textContent += "頭像已套用，但無法保存目前選擇；重新載入後可能會還原。";
+  }
+}
+
+document.querySelector("#avatarConfirmCancel").addEventListener("click", () => {
+  pendingAvatarPurchase = null;
+  avatarConfirmDialog.close();
+  renderAvatarOptions();
+  avatarDialog.showModal();
+});
+document.querySelector("#avatarConfirmBuy").addEventListener("click", () => {
+  const purchase = pendingAvatarPurchase;
+  pendingAvatarPurchase = null;
+  avatarConfirmDialog.close();
+  if (!purchase) return;
+  applyAvatarSelection(purchase.avatar, purchase.index);
+  renderAvatarOptions();
+  avatarDialog.showModal();
+});
+avatarConfirmDialog.addEventListener("close", () => {
+  if (pendingAvatarPurchase) {
+    renderAvatarOptions();
+    avatarDialog.showModal();
+  }
+  pendingAvatarPurchase = null;
+});
 
 avatarSwitch.addEventListener("click", () => {
   renderAvatarOptions();
