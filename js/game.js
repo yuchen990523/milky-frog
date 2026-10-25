@@ -48,6 +48,19 @@ const CUSTOMERS = [
   { id: "customer-12", image: "./assets/奶蛙.webp" }
 ];
 
+const AVATARS = [
+  ...CUSTOMERS,
+  { id: "left-frame", image: "./assets/emo.png.jpg", unlockLevel: 50 },
+  { id: "right-frame", image: "./assets/s.png.jpg", unlockLevel: 100 },
+  { id: "avatar-yellow", image: "./assets/avatar-yellow.webp", purchaseCost: 300 },
+  { id: "avatar-laugh", image: "./assets/avatar-laugh.webp", purchaseCost: 300 },
+  { id: "avatar-pink", image: "./assets/avatar-pink.webp", purchaseCost: 300 },
+  { id: "avatar-success", image: "./assets/avatar-success.jpg", purchaseCost: 300 }
+];
+const purchasableAvatarIds = AVATARS
+  .filter((avatar) => avatar.purchaseCost)
+  .map((avatar) => avatar.id);
+
 // 讀取畫面節點一次並保留參照，避免每次操作都重新查詢 DOM。
 const canvas = document.querySelector("#cakeCanvas");
 const ctx = canvas.getContext("2d");
@@ -65,6 +78,7 @@ const levelExperience = document.querySelector("#levelExperience");
 const levelTrack = document.querySelector("#levelTrack");
 const levelProgress = document.querySelector("#levelProgress");
 const levelTitle = document.querySelector("#levelTitle");
+const coinBalance = document.querySelector("#coinBalance");
 const outcomeDialog = document.querySelector("#outcomeDialog");
 const outcomeTitle = document.querySelector("#outcomeTitle");
 const outcomeImage = document.querySelector("#outcomeImage");
@@ -72,25 +86,84 @@ const outcomePlaceholder = document.querySelector("#outcomePlaceholder");
 const outcomeDetail = document.querySelector("#outcomeDetail");
 const outcomeStars = document.querySelector("#outcomeStars");
 const outcomeRewards = document.querySelector("#outcomeRewards");
+const outcomeExperience = document.querySelector("#outcomeExperience");
+const outcomeCoins = document.querySelector("#outcomeCoins");
+const coinBalanceText = document.querySelector("#coinBalanceText");
 const progressStorageKey = "milk-frog-cake-shop-progress";
+const nicknameStorageKey = "milk-frog-cake-shop-nickname";
+const nicknameDialog = document.querySelector("#nicknameDialog");
+const nicknameForm = document.querySelector("#nicknameForm");
+const nicknameInput = document.querySelector("#nicknameInput");
+const nicknameError = document.querySelector("#nicknameError");
+const nicknameTitle = document.querySelector("#nicknameTitle");
+const nicknameDescription = document.querySelector("#nicknameDescription");
+const nicknameCost = document.querySelector("#nicknameCost");
+const nicknameSubmitButton = nicknameForm.querySelector('[type="submit"]');
+const playerNickname = document.querySelector("#playerNickname");
+const avatarSwitch = document.querySelector("#avatarSwitch");
+const playerAvatar = document.querySelector("#playerAvatar");
+const avatarDialog = document.querySelector("#avatarDialog");
+const avatarOptions = document.querySelector("#avatarOptions");
+const levelProgressDialog = document.querySelector("#levelProgressDialog");
+const levelUnlockProgress = document.querySelector("#levelUnlockProgress");
+
+function loadNickname() {
+  try {
+    return localStorage.getItem(nicknameStorageKey)?.trim() ?? "";
+  } catch (error) {
+    console.error("讀取玩家暱稱失敗：", error);
+    return "";
+  }
+}
+
+function loadAvatarIndex() {
+  try {
+    const savedIndex = Number.parseInt(localStorage.getItem("milk-frog-cake-shop-avatar") ?? "0", 10);
+    return Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < AVATARS.length
+      ? savedIndex
+      : 0;
+  } catch (error) {
+    console.error("讀取玩家頭像失敗：", error);
+    return 0;
+  }
+}
 
 // state 是本局唯一的遊戲狀態來源；畫面由它重新繪製，避免 DOM 與 Canvas 資料不同步。
-function loadTotalExperience() {
+function loadSavedProgress() {
   try {
     const savedProgress = localStorage.getItem(progressStorageKey);
-    if (savedProgress === null) return 0;
+    if (savedProgress === null) {
+      return { totalExperience: 0, totalCoins: 0, purchasedAvatarIds: [] };
+    }
 
     const parsedProgress = JSON.parse(savedProgress);
     if (!Number.isSafeInteger(parsedProgress.totalExperience) || parsedProgress.totalExperience < 0) {
       throw new Error("存檔中的經驗值格式無效");
     }
-    return parsedProgress.totalExperience;
+    const totalCoins = parsedProgress.totalCoins ?? 0;
+    if (!Number.isSafeInteger(totalCoins) || totalCoins < 0) {
+      throw new Error("存檔中的金幣格式無效");
+    }
+    const purchasedAvatarIds = parsedProgress.purchasedAvatarIds ?? [];
+    if (
+      !Array.isArray(purchasedAvatarIds) ||
+      purchasedAvatarIds.some((id) => !purchasableAvatarIds.includes(id))
+    ) {
+      throw new Error("存檔中的已購買頭像格式無效");
+    }
+    return {
+      totalExperience: parsedProgress.totalExperience,
+      totalCoins,
+      purchasedAvatarIds
+    };
   } catch (error) {
     console.error("讀取等級進度失敗：", error);
-    message.textContent = "無法讀取等級存檔，本次遊戲會從等級 1 開始。";
-    return 0;
+    message.textContent = "無法讀取玩家進度存檔，本次遊戲會從等級 1 和 0 金幣開始。";
+    return { totalExperience: 0, totalCoins: 0, purchasedAvatarIds: [] };
   }
 }
+
+const savedProgress = loadSavedProgress();
 
 const state = {
   order: null,
@@ -99,7 +172,11 @@ const state = {
   availableChoices: { base: [], cream: [], topping: [] },
   nextOrderId: 1,
   cake: { base: null, cream: null, topping: null },
-  totalExperience: loadTotalExperience(),
+  totalExperience: savedProgress.totalExperience,
+  totalCoins: savedProgress.totalCoins,
+  purchasedAvatarIds: savedProgress.purchasedAvatarIds,
+  nickname: loadNickname(),
+  avatarIndex: loadAvatarIndex(),
   level: 1,
   experience: 0,
   experienceToNext: 100,
@@ -107,7 +184,7 @@ const state = {
   orderStartedAt: null,
 };
 
-// 每十等提升一次頭銜，達到最高階後維持最終稱號。
+// 50 等以前每五等提升一次頭銜，之後每十等提升一次。
 function updateLevelDisplay() {
   let remainingExperience = state.totalExperience;
   let level = 1;
@@ -133,34 +210,60 @@ function updateLevelDisplay() {
     "烘焙奶蛙宗師",
     "蛋糕奶蛙王者",
     "奶蛙傳奇",
-    "甜點宇宙奶蛙至尊"
+    "甜點宇宙奶蛙至尊",
+    "奶蛙星際烘焙師",
+    "宇宙甜點創世主",
+    "全能奶蛙烘焙神",
+    "甜點次元守護者",
+    "奶蛙甜點永恆傳說"
   ];
-  const title = titles[Math.min(Math.floor((level - 1) / 10), titles.length - 1)];
+  const titleIndex = level <= 50
+    ? Math.floor((level - 1) / 5)
+    : 10 + Math.floor((level - 51) / 10);
+  const title = titles[Math.min(titleIndex, titles.length - 1)];
+  const selectedAvatar = AVATARS[state.avatarIndex];
+  if (
+    (selectedAvatar.unlockLevel && level < selectedAvatar.unlockLevel) ||
+    (selectedAvatar.purchaseCost && !state.purchasedAvatarIds.includes(selectedAvatar.id))
+  ) {
+    state.avatarIndex = 0;
+  }
   levelNumber.textContent = `等級 ${level}`;
   levelExperience.textContent = `${remainingExperience} / ${experienceToNext} XP`;
   levelTitle.textContent = title;
+  coinBalanceText.textContent = `金幣：${state.totalCoins}`;
+  playerNickname.textContent = state.nickname || "未設定暱稱";
+  const avatar = AVATARS[state.avatarIndex];
+  playerAvatar.src = avatar.image;
+  playerAvatar.alt = `${state.nickname || "玩家"}的頭像`;
+  avatarSwitch.setAttribute("aria-label", `切換玩家頭像，目前為第 ${state.avatarIndex + 1} 張`);
   levelProgress.style.width = `${(remainingExperience / experienceToNext) * 100}%`;
   levelTrack.setAttribute("aria-valuemax", String(experienceToNext));
   levelTrack.setAttribute("aria-valuenow", String(remainingExperience));
 }
 
-function awardExperience(amount) {
+function awardExperience(amount, coinAmount) {
   const previousLevel = state.level;
   state.totalExperience += amount;
+  state.totalCoins += coinAmount;
   updateLevelDisplay();
   let saved = true;
 
   try {
     localStorage.setItem(
       progressStorageKey,
-      JSON.stringify({ totalExperience: state.totalExperience })
+      JSON.stringify({
+        totalExperience: state.totalExperience,
+        totalCoins: state.totalCoins,
+        purchasedAvatarIds: state.purchasedAvatarIds
+      })
     );
   } catch (error) {
-    console.error("保存等級進度失敗：", error);
+    console.error("保存等級與金幣進度失敗：", error);
     saved = false;
   }
 
-  return { amount, leveledUp: state.level > previousLevel, saved };
+  return { amount, coinAmount, leveledUp: state.level > previousLevel, saved };
 }
 
 function getStarRating(elapsedMilliseconds) {
@@ -192,7 +295,7 @@ function updateTimerDisplay() {
   );
 }
 
-function showOutcome({ success, elapsedSeconds, starDisplay, starRating, experience }) {
+function showOutcome({ success, elapsedSeconds, starDisplay, starRating, experience, coins }) {
   outcomeDialog.classList.toggle("is-failure", !success);
   outcomeTitle.textContent = success ? "製作成功！" : "製作失敗";
   outcomeDetail.textContent = success
@@ -200,25 +303,24 @@ function showOutcome({ success, elapsedSeconds, starDisplay, starRating, experie
     : "蛋糕和訂單不符，這次沒有獲得經驗值。";
   outcomeStars.textContent = `${starDisplay}（${starRating} 顆星）`;
   outcomeStars.setAttribute("aria-label", `${starRating} 顆星`);
-  outcomeRewards.textContent = `✨ 經驗值 +${experience} XP`;
+  outcomeExperience.textContent = `✨ 經驗值 +${experience} XP`;
+  outcomeCoins.textContent = `+${coins}`;
   outcomeImage.hidden = true;
   outcomeImage.onload = null;
   outcomeImage.onerror = null;
   outcomeImage.removeAttribute("src");
   outcomePlaceholder.hidden = false;
   outcomePlaceholder.textContent = success ? "🐸✨" : "🐸😞";
-  outcomeImage.alt = success ? "奶蛙" : "";
-  if (success) {
-    outcomeImage.onload = () => {
-      outcomeImage.hidden = false;
-      outcomePlaceholder.hidden = true;
-    };
-    outcomeImage.onerror = () => {
-      outcomeImage.hidden = true;
-      outcomePlaceholder.hidden = false;
-    };
-    outcomeImage.src = "./assets/奶蛙2.webp";
-  }
+  outcomeImage.alt = success ? "奶蛙" : "製作失敗時的哭泣角色";
+  outcomeImage.onload = () => {
+    outcomeImage.hidden = false;
+    outcomePlaceholder.hidden = true;
+  };
+  outcomeImage.onerror = () => {
+    outcomeImage.hidden = true;
+    outcomePlaceholder.hidden = false;
+  };
+  outcomeImage.src = success ? "./assets/success.jpg" : "./assets/failure.jpg";
   outcomeDialog.showModal();
   document.querySelector("#outcomeClose").focus();
 }
@@ -1027,21 +1129,22 @@ function submitCake() {
   const elapsedSeconds = elapsedMilliseconds / 1000;
   const starRating = correctCount === 3 ? getStarRating(elapsedMilliseconds) : 0;
   const starDisplay = `${"★".repeat(starRating)}${"☆".repeat(5 - starRating)}`;
-  const earnedExperience = correctCount === 3 ? Math.floor(45 * starRating / 5) : 0;
+  const earnedExperience = correctCount === 3 ? 20 * starRating : 0;
+  const earnedCoins = correctCount === 3 ? 10 * starRating : 0;
 
-  const levelResult = awardExperience(earnedExperience);
+  const levelResult = awardExperience(earnedExperience, earnedCoins);
 
   if (correctCount === 3) {
-    message.textContent = `太完美了！獲得 ${earnedExperience} XP！`;
+    message.textContent = `太完美了！獲得 ${earnedExperience} XP 和 ${earnedCoins} 金幣！`;
   } else {
-    message.textContent = `有 ${correctCount} 項符合訂單，沒有獲得經驗值。再試一次全對吧！`;
+    message.textContent = `有 ${correctCount} 項符合訂單，沒有獲得經驗值或金幣。再試一次全對吧！`;
   }
   message.textContent += ` 製作 ${elapsedSeconds.toFixed(1)} 秒，獲得 ${starDisplay}（${starRating} 顆星）。`;
   if (levelResult.leveledUp) {
     message.textContent += ` 升級了！現在是等級 ${state.level}：${levelTitle.textContent}。`;
   }
   if (!levelResult.saved) {
-    message.textContent += " 等級進度無法保存，請檢查瀏覽器的本機儲存設定。";
+    message.textContent += " 等級與金幣進度無法保存，請檢查瀏覽器的本機儲存設定。";
   }
 
   showOutcome({
@@ -1049,7 +1152,8 @@ function submitCake() {
     elapsedSeconds,
     starDisplay,
     starRating,
-    experience: earnedExperience
+    experience: earnedExperience,
+    coins: earnedCoins
   });
 
   // 交付後移除已完成的訂單並補入新訂單，候單數量維持不變。
@@ -1102,6 +1206,227 @@ document.querySelector("#outcomeClose").addEventListener("click", () => outcomeD
 outcomeDialog.addEventListener("click", (event) => {
   if (event.target === outcomeDialog) outcomeDialog.close();
 });
+document.querySelector("#editNicknameButton").addEventListener("click", () => {
+  nicknameInput.value = state.nickname;
+  nicknameTitle.textContent = "修改玩家暱稱";
+  nicknameDescription.textContent = "修改暱稱會花費 500 金幣。";
+  nicknameCost.textContent = `目前金幣：${state.totalCoins}`;
+  nicknameSubmitButton.textContent = "儲存暱稱";
+  nicknameError.textContent = "";
+  nicknameDialog.showModal();
+  nicknameInput.focus();
+});
+function renderAvatarOptions() {
+  avatarOptions.replaceChildren(...AVATARS.map((avatar, index) => {
+    const button = document.createElement("button");
+    button.className = "avatar-option";
+    button.type = "button";
+    const levelUnlocked = !avatar.unlockLevel || state.level >= avatar.unlockLevel;
+    const isPurchased = !avatar.purchaseCost || state.purchasedAvatarIds.includes(avatar.id);
+    const isUnlocked = levelUnlocked && isPurchased;
+    button.disabled = !levelUnlocked;
+    button.setAttribute(
+      "aria-label",
+      !levelUnlocked
+        ? `已鎖定，等級 ${avatar.unlockLevel} 解鎖`
+        : isUnlocked
+          ? `選擇第 ${index + 1} 張頭像`
+          : `購買第 ${index + 1} 張頭像，${avatar.purchaseCost} 金幣`
+    );
+    button.setAttribute("aria-pressed", String(index === state.avatarIndex));
+
+    const image = document.createElement("img");
+    image.src = avatar.image;
+    image.alt = "";
+    image.loading = "lazy";
+    button.append(image);
+    if (!levelUnlocked) {
+      const lockLabel = document.createElement("span");
+      lockLabel.className = "avatar-lock-label";
+      lockLabel.textContent = `🔒 ${avatar.unlockLevel} 級`;
+      button.append(lockLabel);
+    } else {
+      if (!isPurchased) {
+        const priceLabel = document.createElement("span");
+        priceLabel.className = "avatar-lock-label";
+        const coinImage = document.createElement("img");
+        coinImage.src = "./assets/coin.jpg";
+        coinImage.alt = "";
+        const priceText = document.createElement("span");
+        priceText.textContent = String(avatar.purchaseCost);
+        priceLabel.append(coinImage, priceText);
+        button.append(priceLabel);
+      }
+      button.addEventListener("click", () => {
+        if (!isPurchased) {
+          if (state.totalCoins < avatar.purchaseCost) {
+            message.textContent =
+              `金幣不足，購買此頭像需要 ${avatar.purchaseCost} 金幣（目前有 ${state.totalCoins} 金幣）。`;
+            return;
+          }
+
+          const purchasedAvatarIds = [...state.purchasedAvatarIds, avatar.id];
+          const remainingCoins = state.totalCoins - avatar.purchaseCost;
+          try {
+            localStorage.setItem(
+              progressStorageKey,
+              JSON.stringify({
+                totalExperience: state.totalExperience,
+                totalCoins: remainingCoins,
+                purchasedAvatarIds
+              })
+            );
+          } catch (error) {
+            console.error("保存頭像購買紀錄失敗：", error);
+            message.textContent = "無法保存頭像購買紀錄，金幣未扣除；請檢查瀏覽器的本機儲存設定。";
+            return;
+          }
+          state.totalCoins = remainingCoins;
+          state.purchasedAvatarIds = purchasedAvatarIds;
+          message.textContent = `已花費 ${avatar.purchaseCost} 金幣購買頭像。`;
+        }
+
+        state.avatarIndex = index;
+        updateLevelDisplay();
+        renderAvatarOptions();
+        try {
+          localStorage.setItem("milk-frog-cake-shop-avatar", String(index));
+        } catch (error) {
+          console.error("保存玩家頭像失敗：", error);
+          message.textContent += "頭像已套用，但無法保存目前選擇；重新載入後可能會還原。";
+        }
+      });
+    }
+    return button;
+  }));
+}
+
+avatarSwitch.addEventListener("click", () => {
+  renderAvatarOptions();
+  avatarDialog.showModal();
+});
+document.querySelector("#avatarDialogClose").addEventListener("click", () => avatarDialog.close());
+avatarDialog.addEventListener("click", (event) => {
+  if (event.target === avatarDialog) avatarDialog.close();
+});
+function renderLevelUnlockProgress() {
+  const rewards = [
+    { level: 50, name: "解鎖左側相框照片頭像", image: "./assets/emo.png.jpg" },
+    { level: 100, name: "解鎖右側相框照片頭像", image: "./assets/s.png.jpg" }
+  ];
+
+  levelUnlockProgress.replaceChildren(...rewards.map((reward) => {
+    const item = document.createElement("div");
+    item.className = "level-unlock-item";
+
+    const image = document.createElement("img");
+    image.src = reward.image;
+    image.alt = "";
+
+    const details = document.createElement("div");
+    details.className = "level-unlock-details";
+    const heading = document.createElement("strong");
+    heading.textContent = `${reward.level} 級`;
+    const status = document.createElement("span");
+    const progress = document.createElement("div");
+    progress.className = "unlock-progress-track";
+    const fill = document.createElement("div");
+    fill.className = "unlock-progress-fill";
+
+    const unlocked = state.level >= reward.level;
+    const progressPercent = Math.min((state.level / reward.level) * 100, 100);
+    status.textContent = unlocked
+      ? "已解鎖，可在頭像選單選擇"
+      : `目前等級 ${state.level}／${reward.level}`;
+    fill.style.width = `${progressPercent}%`;
+    progress.append(fill);
+    details.append(heading, status, progress);
+    item.append(image, details);
+    return item;
+  }));
+}
+
+document.querySelector("#levelProgressButton").addEventListener("click", () => {
+  renderLevelUnlockProgress();
+  levelProgressDialog.showModal();
+});
+document.querySelector("#levelProgressClose").addEventListener("click", () => {
+  levelProgressDialog.close();
+});
+levelProgressDialog.addEventListener("click", (event) => {
+  if (event.target === levelProgressDialog) levelProgressDialog.close();
+});
+document.querySelector("#cancelNicknameButton").addEventListener("click", () => {
+  if (state.nickname) nicknameDialog.close();
+});
+nicknameForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const nickname = nicknameInput.value.trim();
+  if (!nickname) {
+    nicknameError.textContent = "請輸入暱稱後再繼續。";
+    nicknameInput.setAttribute("aria-invalid", "true");
+    nicknameInput.focus();
+    return;
+  }
+
+  nicknameInput.removeAttribute("aria-invalid");
+  nicknameError.textContent = "";
+  if (nickname === state.nickname) {
+    nicknameDialog.close();
+    return;
+  }
+
+  const renameCost = state.nickname ? 500 : 0;
+  if (state.totalCoins < renameCost) {
+    nicknameError.textContent = `金幣不足，修改暱稱需要 500 金幣（目前有 ${state.totalCoins} 金幣）。`;
+    nicknameInput.focus();
+    return;
+  }
+
+  try {
+    if (renameCost > 0) {
+      localStorage.setItem(
+        progressStorageKey,
+        JSON.stringify({
+          totalExperience: state.totalExperience,
+          totalCoins: state.totalCoins - renameCost,
+          purchasedAvatarIds: state.purchasedAvatarIds
+        })
+      );
+    }
+    localStorage.setItem(nicknameStorageKey, nickname);
+  } catch (error) {
+    console.error("保存玩家暱稱失敗：", error);
+    if (renameCost > 0) {
+      try {
+        localStorage.setItem(
+          progressStorageKey,
+          JSON.stringify({
+            totalExperience: state.totalExperience,
+            totalCoins: state.totalCoins,
+            purchasedAvatarIds: state.purchasedAvatarIds
+          })
+        );
+      } catch (rollbackError) {
+        console.error("還原修改暱稱扣除的金幣失敗：", rollbackError);
+      }
+    }
+    nicknameError.textContent = "暱稱無法保存，請檢查瀏覽器的本機儲存設定後再試。";
+    return;
+  }
+
+  state.nickname = nickname;
+  state.totalCoins -= renameCost;
+  updateLevelDisplay();
+  nicknameDialog.close();
+});
+nicknameInput.addEventListener("input", () => {
+  nicknameError.textContent = "";
+  nicknameInput.removeAttribute("aria-invalid");
+});
+nicknameDialog.addEventListener("cancel", (event) => {
+  if (!state.nickname) event.preventDefault();
+});
 window.addEventListener("resize", resizeCanvas);
 window.setInterval(updateTimerDisplay, 100);
 
@@ -1130,3 +1455,15 @@ renderOrders();
 updateLevelDisplay();
 updateIngredientSteps();
 resizeCanvas();
+if (!state.nickname) {
+  nicknameInput.value = "";
+  nicknameTitle.textContent = "設定玩家暱稱";
+  nicknameDescription.textContent = "開始遊戲前，先輸入你的暱稱吧！";
+  nicknameCost.textContent = "首次設定免費；修改暱稱需 500 金幣。";
+  nicknameSubmitButton.textContent = "開始遊戲";
+  document.querySelector("#cancelNicknameButton").hidden = true;
+  nicknameDialog.showModal();
+  nicknameInput.focus();
+} else {
+  document.querySelector("#cancelNicknameButton").hidden = false;
+}

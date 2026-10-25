@@ -63,6 +63,13 @@
             <strong id="levelNumber">等級 1</strong>
             <span id="levelExperience">0 / 100 XP</span>
           </div>
+          <p class="coin-balance" id="coinBalance" aria-live="polite">
+            <img src="./assets/coin.jpg" alt="" class="coin-icon">
+            <span id="coinBalanceText">金幣：0</span>
+          </p>
+          <button class="level-progress-button" id="levelProgressButton" type="button">
+            查看等級解鎖進度
+          </button>
           <div
             class="level-track"
             id="levelTrack"
@@ -75,6 +82,19 @@
             <div class="level-progress" id="levelProgress"></div>
           </div>
           <p class="level-title" id="levelTitle">新手烘焙師</p>
+          <div class="nickname-row">
+            <button
+              class="avatar-switch"
+              id="avatarSwitch"
+              type="button"
+              aria-label="切換玩家頭像"
+              title="點擊切換頭像"
+            >
+              <img id="playerAvatar" alt="">
+            </button>
+            <span id="playerNickname" aria-live="polite"></span>
+            <button class="nickname-edit" id="editNicknameButton" type="button">修改暱稱</button>
+          </div>
           </div>
         </section>
         <section class="panel order-panel" aria-labelledby="orderHeading">
@@ -97,8 +117,50 @@
     </div>
     <p class="outcome-detail" id="outcomeDetail"></p>
     <p class="outcome-stars" id="outcomeStars" aria-label="本次星等"></p>
-    <p class="outcome-rewards" id="outcomeRewards"></p>
+    <p class="outcome-rewards" id="outcomeRewards">
+      <span id="outcomeExperience"></span>
+      <span class="outcome-coin-reward">
+        <img src="./assets/coin.jpg" alt="" class="coin-icon">
+        <span id="outcomeCoins"></span>
+      </span>
+    </p>
     <button class="outcome-close" id="outcomeClose" type="button">繼續製作</button>
+  </dialog>
+
+  <dialog class="nickname-dialog" id="nicknameDialog" aria-labelledby="nicknameTitle">
+    <form id="nicknameForm">
+      <h2 id="nicknameTitle">設定玩家暱稱</h2>
+      <p id="nicknameDescription">開始遊戲前，先輸入你的暱稱吧！</p>
+      <p class="nickname-cost" id="nicknameCost">首次設定免費；修改暱稱需 500 金幣。</p>
+      <label for="nicknameInput">暱稱</label>
+      <input
+        id="nicknameInput"
+        name="nickname"
+        type="text"
+        maxlength="16"
+        autocomplete="nickname"
+        placeholder="最多 16 個字"
+        aria-describedby="nicknameError"
+      >
+      <p class="nickname-error" id="nicknameError" aria-live="polite"></p>
+      <div class="nickname-actions">
+        <button class="nickname-cancel" id="cancelNicknameButton" type="button">取消</button>
+        <button class="nickname-save" type="submit">開始遊戲</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="avatar-dialog" id="avatarDialog" aria-labelledby="avatarDialogTitle">
+    <h2 id="avatarDialogTitle">選擇頭像</h2>
+    <div class="avatar-options" id="avatarOptions" role="group" aria-label="可選頭像"></div>
+    <button class="avatar-dialog-close" id="avatarDialogClose" type="button">完成</button>
+  </dialog>
+
+  <dialog class="level-progress-dialog" id="levelProgressDialog" aria-labelledby="levelProgressTitle">
+    <h2 id="levelProgressTitle">頭像解鎖進度</h2>
+    <p class="level-progress-intro">提升等級即可解鎖新的玩家頭像。</p>
+    <div class="level-unlock-list" id="levelUnlockProgress"></div>
+    <button class="avatar-dialog-close" id="levelProgressClose" type="button">完成</button>
   </dialog>
 
   <script src="./js/game.js" defer></script>
