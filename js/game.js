@@ -52,14 +52,17 @@ const AVATARS = [
   ...CUSTOMERS,
   { id: "left-frame", image: "./assets/emo.png.jpg", unlockLevel: 50 },
   { id: "right-frame", image: "./assets/s.png.jpg", unlockLevel: 100 },
-  { id: "avatar-yellow", image: "./assets/avatar-yellow.webp", purchaseCost: 300 },
   { id: "avatar-laugh", image: "./assets/avatar-laugh.webp", purchaseCost: 300 },
   { id: "avatar-pink", image: "./assets/avatar-pink.webp", purchaseCost: 300 },
-  { id: "avatar-success", image: "./assets/avatar-success.jpg", purchaseCost: 300 }
+  { id: "avatar-success", image: "./assets/avatar-success.jpg", purchaseCost: 300 },
+  { id: "avatar-tricycle", image: "./assets/835996759_935333869257991_8536188703495291097_n.jpg", purchaseCost: 300 },
+  { id: "avatar-frog-tie", image: "./assets/images.jpg", purchaseCost: 300 }
 ];
 const purchasableAvatarIds = AVATARS
   .filter((avatar) => avatar.purchaseCost)
   .map((avatar) => avatar.id);
+const retiredAvatarIds = ["avatar-yellow"];
+const savedAvatarIds = [...purchasableAvatarIds, ...retiredAvatarIds];
 
 // 讀取畫面節點一次並保留參照，避免每次操作都重新查詢 DOM。
 const canvas = document.querySelector("#cakeCanvas");
@@ -119,9 +122,9 @@ function loadNickname() {
 function loadAvatarIndex() {
   try {
     const savedIndex = Number.parseInt(localStorage.getItem("milk-frog-cake-shop-avatar") ?? "0", 10);
-    return Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < AVATARS.length
-      ? savedIndex
-      : 0;
+    if (!Number.isInteger(savedIndex) || savedIndex < 0 || savedIndex > AVATARS.length) return 0;
+    if (savedIndex === 14) return 0;
+    return savedIndex > 14 ? savedIndex - 1 : savedIndex;
   } catch (error) {
     console.error("讀取玩家頭像失敗：", error);
     return 0;
@@ -147,7 +150,7 @@ function loadSavedProgress() {
     const purchasedAvatarIds = parsedProgress.purchasedAvatarIds ?? [];
     if (
       !Array.isArray(purchasedAvatarIds) ||
-      purchasedAvatarIds.some((id) => !purchasableAvatarIds.includes(id))
+      purchasedAvatarIds.some((id) => !savedAvatarIds.includes(id))
     ) {
       throw new Error("存檔中的已購買頭像格式無效");
     }

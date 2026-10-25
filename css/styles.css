@@ -235,6 +235,7 @@ button {
   overflow: hidden;
   border-radius: 50%;
   object-fit: cover;
+  object-position: center top;
 }
 
 .avatar-switch::after {
